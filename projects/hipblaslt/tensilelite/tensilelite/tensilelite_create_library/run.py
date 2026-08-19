@@ -53,8 +53,6 @@ from tensilelite.Common import (
     setVerbosity,
     getVerbosity,
 )
-from tensilelite.Common.Architectures import ARCH_COMPILER_TARGET, baseArchName, gfxToIsa, isaToGfx, SUPPORTED_GFX, splitArchsFromPredicates, filterLogicFilesByPredicates, expandAllArchitectures, gfxToCompilerTarget
-from tensilelite.Common.Capabilities import applyArchCapOverrides, makeIsaInfoMap
 from tensilelite.Common.GlobalParameters import assignGlobalParameters, globalParameters
 from tensilelite.Common.TimingInstrumentation import timing_context
 from tensilelite.SolutionStructs.Naming import getKernelFileBase, getKeyNoInternalArgs, getKernelNameMin
@@ -139,6 +137,50 @@ from .parse_arguments import parseArguments
 # SOFTWARE.
 #
 ################################################################################
+
+################################################################################
+#
+# Copyright (C) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+################################################################################
+################################################################################
+#
+# Copyright (C) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+################################################################################
+
 
 def libraryRoot(outputPath: Union[str, Path]) -> Path:
     """The library/ root directory under outputPath.
@@ -913,28 +955,11 @@ def generateLogicDataAndSolutions(logicFiles, args, assembler: Assembler, isaInf
         LibraryIO.parseLibraryLogicFile, fIter, "Loading Logics...", return_as="generator"
     )
     for library in parsedLibraries:
-        scheduleName, architectureName, _, _, _, newLibrary, typeMismatches = library
+        _, architectureName, _, _, _, newLibrary, typeMismatches = library
         mergeTypeMismatchSnapshot(typeMismatchAggregate, typeMismatches)
 
         if architectureName == "":
             continue
-
-        # A silicon stepping cannot label a library. This name keys masterLibraries,
-        # while the writes are keyed by the ISA-derived name, so a stepping-named
-        # file is dropped there without a word and the build reports success having
-        # written nothing for it. Honoring the name instead would be no better: the
-        # runtime resolves libraries by the architecture the driver reports, so
-        # library/gfx1250v0/ is a directory nothing ever looks in. Tuned logic
-        # records the architecture; the stepping is a build-time capability
-        # distinction, selected by --architecture.
-        if architectureName in ARCH_COMPILER_TARGET:
-            raise ValueError(
-                f"Library logic '{scheduleName}' declares ArchitectureName "
-                f"'{architectureName}', which names a silicon stepping rather than an "
-                f"architecture. Record it as "
-                f"'{ARCH_COMPILER_TARGET[architectureName]}' and select the stepping "
-                f"at build time with --architecture={architectureName}."
-            )
 
         if architectureName in masterLibraries:
             nextSolIndex = masterLibraries[architectureName].merge(newLibrary, nextSolIndex)
@@ -1048,16 +1073,12 @@ def run(argv=None):
         archs = arguments["Architecture"].split(";")
     else:
         archs = arguments["Architecture"].split("_")
-    archs = expandAllArchitectures(archs)
+    archs = SUPPORTED_GFX if "all" in archs else archs
     archs, requestedPredicateMap = splitArchsFromPredicates(archs)
 
     targetIsas = [gfxToIsa(a) for a in archs]
     isaInfoMap = makeIsaInfoMap(targetIsas, cxxCompiler)
-    applyArchCapOverrides(isaInfoMap, archs)
     assignGlobalParameters(arguments, isaInfoMap)
-
-    # gfx1250 v0/v1 share ISA (12,5,0); pass the concrete stepping name so StinkyTofu picks the right cost table.
-    globalParameters["StinkyTofuArchName"] = "gfx1250v0" if any(baseArchName(a) == "gfx1250v0" for a in archs) else ""
 
     asmToolchain = makeAssemblyToolchain(
         cxxCompiler,
@@ -1087,6 +1108,9 @@ def run(argv=None):
         logicExtFormat = ".json"
     else:
         printExit(f"Unrecognized LogicFormat: {arguments['LogicFormat']}")
+
+    def archMatch(arch: str, archs: List[str]):
+        return (arch in archs) or any(a.startswith(arch) for a in archs)
 
     def validLogicFile(p: Path):
         return p.suffix == logicExtFormat and (
@@ -1144,10 +1168,7 @@ def run(argv=None):
         kernels,
         kernelHelperObjs,
         kernelWriterAssembly,
-        # Compiler targets, not the requested names: these drive --offload-arch for
-        # the HIP helper kernels and the library layout, and both must agree with
-        # the ISA-derived names used for the per-architecture writes below.
-        [gfxToCompilerTarget(a) for a in archs],
+        archs,
         arguments["DisableAsmComments"],
         compress=arguments["UseCompression"],
         removeTemporaries=not arguments["KeepBuildTmp"],
