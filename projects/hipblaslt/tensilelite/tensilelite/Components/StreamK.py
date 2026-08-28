@@ -4691,7 +4691,7 @@ class StreamKHybrid(StreamK):
         SkNextWorkItem), so we only derive its tile identity + WorkGroup* here
         (no second queue interaction, no LDS broadcast).
         """
-        from Tensile.Components.WorkGroupMappingAlgos import DefaultWGM, SpaceFillingCurveWalk
+        from tensilelite.Components.WorkGroupMappingAlgos import DefaultWGM, SpaceFillingCurveWalk
 
         module = Module("StreamK Hybrid prefetchAcrossPersistentSetupNextTile")
 

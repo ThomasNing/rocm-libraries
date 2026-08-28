@@ -51,7 +51,7 @@ except ImportError:
 # ``base.py`` (where the actual state lives -- see ``base.py`` design
 # note on state sinking). The class is kept (rather than collapsed into
 # module functions) purely to preserve the ``rocIsa.getInstance().X()``
-# call shape that KernelWriter / Tensile / the C++ binding share.
+# call shape that KernelWriter / TensileLite / the C++ binding share.
 #
 # Backwards-compatible read/write of the historical private fields
 # (``_vgpr_idx`` / ``_kernel_info``) is provided via ``@property``
@@ -64,7 +64,7 @@ class rocIsa:
 
     All state lives in ``base.py`` module-level globals. This class
     only exists to keep the public API surface
-    (``rocIsa.getInstance().method(...)``) intact for Tensile /
+    (``rocIsa.getInstance().method(...)``) intact for TensileLite /
     KernelWriter callers; ``__init__`` deliberately stores nothing on
     the instance.
 
@@ -82,7 +82,7 @@ class rocIsa:
           Label.toString side effect; no consumer today)
 
     The C++ original keeps per-thread state (``m_threads`` /
-    ``m_outputOptions``); Tensile only ever reads it back via
+    ``m_outputOptions``); TensileLite only ever reads it back via
     parameter-less getters from the same thread that wrote it, and across
     process boundaries goes through pickle, so a single per-process
     value (held in ``base.py``) is sufficient here.
