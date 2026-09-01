@@ -41,6 +41,18 @@ struct GemmConfigBase
     static constexpr ck_tile::DataCachePrefetchKind DataCachePrefetchB =
         ck_tile::DataCachePrefetchKind::None;
     static constexpr bool Async = false;
+
+    static constexpr bool FixedVectorSize         = false;
+    static constexpr ck_tile::index_t VectorSizeA = 1;
+    static constexpr ck_tile::index_t VectorSizeB = 1;
+    static constexpr bool SupportsKVectorTail     = false;
+};
+
+template <typename GemmConfig>
+struct GemmConfigVectorKTail : public GemmConfig
+{
+    static constexpr bool kPadK               = true;
+    static constexpr bool SupportsKVectorTail = true;
 };
 
 template <typename PrecType>

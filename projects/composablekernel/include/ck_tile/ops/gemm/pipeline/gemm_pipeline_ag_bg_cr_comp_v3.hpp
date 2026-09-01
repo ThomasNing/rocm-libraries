@@ -178,6 +178,8 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
     static constexpr bool kPadN = Problem::kPadN;
     static constexpr bool kPadK = Problem::kPadK;
 
+    static constexpr bool SupportsKVectorTail = Problem::SupportsKVectorTail;
+
     static constexpr bool DoubleSmemBuffer = Problem::DoubleSmemBuffer;
     static constexpr index_t NumWaveGroups = Problem::NumWaveGroups;
     static constexpr index_t Preshuffle    = Problem::Preshuffle;
@@ -565,6 +567,9 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
 
             constexpr auto PrefetchCondition = Problem::Async ? PrefillAfter : PrefillBefore;
 
+            static_assert(!(Problem::SupportsKVectorTail && Problem::Async),
+                          "vector K tail loading is not implemented for the async path");
+
             auto global_prefetch = [&](auto& lds_tile,
                                        auto& dram_tile,
                                        auto& window_step,
@@ -583,7 +588,15 @@ struct GemmPipelineAgBgCrCompV3 : public BaseGemmPipelineAgBgCrCompV3<Problem>
                     else
                     {
                         // global -> vgpr
-                        global_tile = load_tile_with_elementwise(dram_tile, element_func);
+                        if constexpr(Problem::SupportsKVectorTail)
+                        {
+                            global_tile = dram_tile[I0{}].load_with_elementwise_and_vector_k_tail(
+                                dram_tile, element_func);
+                        }
+                        else
+                        {
+                            global_tile = load_tile_with_elementwise(dram_tile, element_func);
+                        }
                         move_tile_window(dram_tile, window_step);
                     }
                 }

@@ -23,9 +23,10 @@ struct UniversalInvoker
               bool Persistent,
               typename CDEElementWise,
               typename ComputeDataType = void>
-    static float gemm(const ck_tile::GemmHostArgs& args,
-                      const ck_tile::stream_config& s,
-                      bool check_arg_only = false)
+    // Instantiate and launch one concrete GEMM configuration.
+    static float gemm_impl(const ck_tile::GemmHostArgs& args,
+                           const ck_tile::stream_config& s,
+                           bool check_arg_only = false)
     {
         constexpr bool ClusterLaunch =
             GemmConfig::kClusterSizeM > 1 || GemmConfig::kClusterSizeN > 1;
@@ -74,7 +75,9 @@ struct UniversalInvoker
                                              VectorSize,
                                              GemmConfig::DataCachePrefetchA,
                                              GemmConfig::DataCachePrefetchB,
-                                             GemmConfig::Async>;
+                                             GemmConfig::Async,
+                                             false, /*LargeTensors*/
+                                             GemmConfig::SupportsKVectorTail>;
 
         constexpr auto scheduler = GemmConfig::Scheduler;
 
@@ -103,7 +106,10 @@ struct UniversalInvoker
                                                   ck_tile::element_wise::PassThrough,
                                                   ck_tile::element_wise::PassThrough,
                                                   AComputeDataType,
-                                                  BComputeDataType>;
+                                                  BComputeDataType,
+                                                  GemmConfig::FixedVectorSize,
+                                                  GemmConfig::VectorSizeA,
+                                                  GemmConfig::VectorSizeB>;
 
         using GemmPipeline = typename PipelineTypeTraits<
             GemmConfig::Pipeline>::template GemmPipeline<UniversalGemmProblem>;
@@ -219,6 +225,85 @@ struct UniversalInvoker
                 preprocess,
                 ck_tile::make_kernel<GemmConfig::kBlockPerCu>(Kernel{}, grids, blocks, 0, kargs));
         }
+    }
+
+    template <typename GemmConfig,
+              typename ADataType,
+              typename BDataType,
+              typename DsDataType,
+              typename AccDataType,
+              typename CDataType,
+              typename ALayout,
+              typename BLayout,
+              typename DsLayout,
+              typename ELayout,
+              bool Persistent,
+              typename CDEElementWise,
+              typename ComputeDataType = void>
+    // Select the original config or the gfx1250 vector K tail fallback.
+    static float gemm(const ck_tile::GemmHostArgs& args,
+                      const ck_tile::stream_config& s,
+                      bool check_arg_only = false)
+    {
+#if defined(CK_USE_GFX1250)
+        // Check RCR, 16-bit input
+        constexpr bool IsRcr = std::is_same_v<ALayout, ck_tile::tensor_layout::gemm::RowMajor> &&
+                               std::is_same_v<BLayout, ck_tile::tensor_layout::gemm::ColumnMajor> &&
+                               std::is_same_v<ELayout, ck_tile::tensor_layout::gemm::RowMajor>;
+        constexpr bool Is16BitInput =
+            ck_tile::is_any_of<ADataType, ck_tile::half_t, ck_tile::bf16_t>::value &&
+            std::is_same_v<ADataType, BDataType>;
+
+        // Scope the fallback to:
+        // gfx1250, 16-bit RCR GEMM, ComputeV3 pipeline, no preshuffle
+        constexpr bool CanUseVectorKTail =
+            IsRcr && Is16BitInput && GemmConfig::Pipeline == ck_tile::GemmPipeline::COMPUTE_V3 &&
+            !GemmConfig::Preshuffle;
+
+        if constexpr(CanUseVectorKTail)
+        {
+            // gfx1250, fp16/bf16: KVectorSize = 8
+            constexpr ck_tile::index_t KVectorSize = 8;
+            // Check that K_Warp_Tile is a multiple of 8, to preserve the K-tail vector remainder
+            // when split-K is used
+            static_assert(GemmConfig::K_Warp_Tile % KVectorSize == 0,
+                          "split-K tiles must preserve the K-tail vector remainder");
+
+            if(args.K % KVectorSize != 0)
+            {
+                // Vector loads; scalar loads in the last transaction (K tail).
+                using VectorKTailConfig = GemmConfigVectorKTail<GemmConfig>;
+                return gemm_impl<VectorKTailConfig,
+                                 ADataType,
+                                 BDataType,
+                                 DsDataType,
+                                 AccDataType,
+                                 CDataType,
+                                 ALayout,
+                                 BLayout,
+                                 DsLayout,
+                                 ELayout,
+                                 Persistent,
+                                 CDEElementWise,
+                                 ComputeDataType>(args, s, check_arg_only);
+            }
+        }
+#endif
+
+        // Original GemmConfig (including gfx1250 K%8 == 0) path
+        return gemm_impl<GemmConfig,
+                         ADataType,
+                         BDataType,
+                         DsDataType,
+                         AccDataType,
+                         CDataType,
+                         ALayout,
+                         BLayout,
+                         DsLayout,
+                         ELayout,
+                         Persistent,
+                         CDEElementWise,
+                         ComputeDataType>(args, s, check_arg_only);
     }
 
     template <typename GemmConfig,

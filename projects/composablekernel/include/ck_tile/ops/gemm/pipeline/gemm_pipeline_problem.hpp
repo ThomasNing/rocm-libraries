@@ -317,6 +317,8 @@ struct UniversalGemmPipelineProblem
     static constexpr index_t VectorSizeA = VectorSizeA_;
     static constexpr index_t VectorSizeB = VectorSizeB_;
 
+    static constexpr bool SupportsKVectorTail = Traits::SupportsKVectorTail;
+
     static constexpr bool Async = Traits::Async;
 
     static constexpr index_t VectorLoadSize = Traits::_VectorSize;

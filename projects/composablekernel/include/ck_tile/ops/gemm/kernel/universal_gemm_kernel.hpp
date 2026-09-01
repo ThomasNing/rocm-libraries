@@ -448,6 +448,19 @@ struct UniversalGemmKernel
         }();
     };
 
+    struct supports_k_vector_tail
+    {
+        template <typename T>
+        using has_support_type = decltype(T::SupportsKVectorTail);
+
+        static constexpr bool value = []() {
+            if constexpr(is_detected<has_support_type, GemmPipeline>{})
+                return GemmPipeline::SupportsKVectorTail;
+            else
+                return false;
+        }();
+    };
+
     CK_TILE_HOST static bool IsSupportedArgument(const KernelArgs& kargs)
     {
         if constexpr(has_skip_check_valid_launch_params::value)
@@ -495,7 +508,7 @@ struct UniversalGemmKernel
                     }
                     AsTensorIsValid = false;
                 }
-                if(kargs.K % vectorSizeA != 0)
+                if(kargs.K % vectorSizeA != 0 && !supports_k_vector_tail::value)
                 {
                     if(ck_tile::EnvIsEnabled(CK_TILE_ENV(CK_TILE_LOGGING)))
                     {
@@ -564,7 +577,7 @@ struct UniversalGemmKernel
                     }
                     BsTensorIsValid = false;
                 }
-                if(kargs.K % vectorSizeB != 0)
+                if(kargs.K % vectorSizeB != 0 && !supports_k_vector_tail::value)
                 {
                     if(ck_tile::EnvIsEnabled(CK_TILE_ENV(CK_TILE_LOGGING)))
                     {
