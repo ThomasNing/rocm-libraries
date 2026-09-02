@@ -85,6 +85,9 @@ def test_create_device_library_accepts_explicit_source_root(tmp_path):
         ")",
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    build_ninja = (tmp_path / "build" / "build.ninja").read_text()
+    assert "--use-bundled-known-bugs" in build_ninja
+    assert "--known-bugs" not in build_ninja
 
 
 def test_create_device_library_rejects_incomplete_source_root(tmp_path):

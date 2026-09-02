@@ -157,10 +157,12 @@ function(create_device_library)
             "create_device_library: CODEGEN_ROOT is required; pass the TensileLite source root "
             "or set HIPBLASLT_CODEGEN_ROOT.")
     endif()
+
+    set(_known_bugs_resource "${_codegen_dir}/Tensile/TensileLogic/known_bugs.yaml")
     foreach(_required_path
             "${_codegen_dir}/Tensile/bin/TensileLogic"
             "${_codegen_dir}/Tensile/TensileCreateLibrary/__main__.py"
-            "${_codegen_dir}/Tensile/TensileLogic/known_bugs.yaml")
+            "${_known_bugs_resource}")
         if(NOT EXISTS "${_required_path}")
             message(FATAL_ERROR "create_device_library: required codegen resource not found: ${_required_path}")
         endif()
@@ -265,7 +267,6 @@ function(create_device_library)
         list(APPEND _opts_list "--disable-asm-comments")
     endif()
 
-    set(_known_bugs "${_codegen_dir}/Tensile/TensileLogic/known_bugs.yaml")
     set(_logic_stamp "${CMAKE_CURRENT_BINARY_DIR}/${_cdl_TARGET}-TensileLogic.stamp")
     add_custom_command(
         OUTPUT "${_logic_stamp}"
@@ -275,11 +276,10 @@ function(create_device_library)
             "${_cdl_LOGIC_PATH}"
             --architecture
             "${_arches_semi}"
-            --known-bugs
-            "${_known_bugs}"
+            --use-bundled-known-bugs
             --check-all
         COMMAND ${CMAKE_COMMAND} -E touch "${_logic_stamp}"
-        DEPENDS ${HIPBLASLT_PYTHON_DEPS} "${_known_bugs}"
+        DEPENDS ${HIPBLASLT_PYTHON_DEPS} "${_known_bugs_resource}"
         VERBATIM
         USES_TERMINAL
     )
