@@ -225,8 +225,6 @@ class _SetupNewTilePapTdmWriter:
     def isTdmWaveSeparated(self, kernel):
         return kwa_module.KernelWriterAssembly.isTdmWaveSeparated(self, kernel)
 
-    def tdmDealiasAB(self, kernel):
-        return kwa_module.KernelWriterAssembly.tdmDealiasAB(self, kernel)
 
     def tdmFuseAMx(self, kernel):
         return kwa_module.KernelWriterAssembly.tdmFuseAMx(self, kernel)
@@ -761,6 +759,11 @@ def test_solution_validation_accepts_minimal_pap_tdm_contract():
             {"PrefetchGlobalRead": 3, "ScheduleIterAlg": 3},
             "PrefetchAcrossPersistent requires PrefetchGlobalRead in [1, 2]",
             id="rejects_pgr_above_two",
+        ),
+        pytest.param(
+            {"PrefetchGlobalRead": 2, "PrefetchGlobalReadA": 1, "PrefetchGlobalReadB": 2},
+            "PrefetchGlobalReadA/B: PrefetchAcrossPersistent is not",
+            id="rejects_decoupled_pgr",
         ),
     ],
 )

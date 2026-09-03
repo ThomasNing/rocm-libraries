@@ -196,6 +196,18 @@ def test_lds_segment_interleave_is_named_only_when_applied(make_state):
     assert "_LDSSI" not in names[2]
 
 
+def test_tdmfuse_is_named_only_when_nonzero(make_state):
+    names = {
+        value: N.getKernelNameMin(make_state(TDMFuse=value), splitGSU=False)
+        for value in (0, 1, 2)
+    }
+
+    assert "TDMF" not in names[0]
+    assert "TDMF1" in names[1] and "TDMF1" not in names[2]
+    assert "TDMF2" in names[2]
+    assert len(set(names.values())) == 3
+
+
 def test_empty_custom_kernel_name_is_not_emitted_as_parameter(make_state):
     name = N.getSolutionNameFull(make_state(CustomKernelName=""), splitGSU=False)
 
