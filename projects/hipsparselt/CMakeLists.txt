@@ -204,6 +204,7 @@ if(HIPSPARSELT_ENABLE_HIP)
             OUTPUT_DIR "${_hipsparselt_tensile_out}"
             CODEGEN_ROOT "${HIPBLASLT_TENSILELITE_PATH}"
             PYTHON_EXECUTABLE "${Python_EXECUTABLE}"
+            REQUIRE_GFX1250V0_OVERLAY OFF
             ${_hipsparselt_codegen_product_args}
         )
 

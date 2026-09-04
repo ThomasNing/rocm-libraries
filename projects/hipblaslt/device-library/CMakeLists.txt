@@ -66,9 +66,11 @@ endif()
 # validation on the base name); only the bare gfx1250 reaches here.
 set(_main_arches ${GPU_TARGETS})
 set(_build_gfx1250v0 OFF)
+set(_main_requires_gfx1250v0_overlay OFF)
 if("gfx1250" IN_LIST GPU_TARGETS)
     if(HIPBLASLT_ASIC_REVISION STREQUAL "v0")
         list(TRANSFORM _main_arches REPLACE "^gfx1250$" "gfx1250v0")  # v0 in place of v1
+        set(_main_requires_gfx1250v0_overlay ON)
         message(STATUS "hipBLASLt: gfx1250 ASIC revision v0 only")
     elseif(HIPBLASLT_ASIC_REVISION STREQUAL "v1")
         message(STATUS "hipBLASLt: gfx1250 ASIC revision v1 only")
@@ -85,6 +87,7 @@ create_device_library(
     LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
     OUTPUT_DIR "${HIPBLASLT_TENSILE_LIBPATH}"
     ARCHES ${_main_arches}
+    REQUIRE_GFX1250V0_OVERLAY ${_main_requires_gfx1250v0_overlay}
     ${_codegen_host_sanitizer_args}
     ${_codegen_product_args}
 )
@@ -104,6 +107,7 @@ if(_build_gfx1250v0)
         LOGIC_PATH "${HIPBLASLT_LIBLOGIC_PATH}"
         OUTPUT_DIR "${_gfx1250v0_output_dir}"
         ARCHES gfx1250v0
+        REQUIRE_GFX1250V0_OVERLAY ON
         ${_codegen_host_sanitizer_args}
         ${_codegen_product_args}
     )

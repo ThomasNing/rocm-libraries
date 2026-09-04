@@ -134,12 +134,13 @@ function(create_device_library)
     set(_opts HOST_ASAN HOST_TSAN)
     set(_one
         TARGET LOGIC_PATH OUTPUT_DIR CODEGEN_ROOT PYTHON_EXECUTABLE CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER
-        ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL LAZY_LOAD ASM_COMMENTS KEEP_BUILD_TMP ASM_DEBUG)
+        ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL LAZY_LOAD ASM_COMMENTS KEEP_BUILD_TMP ASM_DEBUG
+        REQUIRE_GFX1250V0_OVERLAY)
     set(_multi ARCHES)
     cmake_parse_arguments(_cdl "${_opts}" "${_one}" "${_multi}" ${ARGN})
 
     if(_cdl_UNPARSED_ARGUMENTS)
-        message(FATAL_ERROR "create_device_library: unexpected arguments: ${_cdl_UNPARSED_ARGUMENTS} (permitted options: HOST_ASAN, HOST_TSAN; single-value keywords: TARGET, LOGIC_PATH, OUTPUT_DIR, CODEGEN_ROOT, PYTHON_EXECUTABLE, CXX_COMPILER, OFFLOAD_BUNDLER, JOBS, LOGIC_FILTER, ASAN, YAML_FORMAT, NO_COMPRESS, EXPERIMENTAL, LAZY_LOAD, ASM_COMMENTS, KEEP_BUILD_TMP, ASM_DEBUG; multi-value keyword: ARCHES)")
+        message(FATAL_ERROR "create_device_library: unexpected arguments: ${_cdl_UNPARSED_ARGUMENTS} (permitted options: HOST_ASAN, HOST_TSAN; single-value keywords: TARGET, LOGIC_PATH, OUTPUT_DIR, CODEGEN_ROOT, PYTHON_EXECUTABLE, CXX_COMPILER, OFFLOAD_BUNDLER, JOBS, LOGIC_FILTER, ASAN, YAML_FORMAT, NO_COMPRESS, EXPERIMENTAL, LAZY_LOAD, ASM_COMMENTS, KEEP_BUILD_TMP, ASM_DEBUG, REQUIRE_GFX1250V0_OVERLAY; multi-value keyword: ARCHES)")
     endif()
     if(NOT _cdl_LOGIC_PATH)
         message(FATAL_ERROR "create_device_library: LOGIC_PATH is required")
@@ -291,17 +292,24 @@ function(create_device_library)
         list(APPEND _opts_list "--disable-asm-comments")
     endif()
 
+    set(_tensile_logic_args
+        "${_cdl_LOGIC_PATH}"
+        --architecture
+        "${_arches_semi}"
+        --use-bundled-known-bugs
+        --check-all
+    )
+    if(_cdl_REQUIRE_GFX1250V0_OVERLAY)
+        list(APPEND _tensile_logic_args --require-gfx1250v0-overlay)
+    endif()
+
     set(_logic_stamp "${CMAKE_CURRENT_BINARY_DIR}/${_cdl_TARGET}-TensileLogic.stamp")
     add_custom_command(
         OUTPUT "${_logic_stamp}"
         COMMENT "Validating library logic (TensileLogic --check-all) for ${_cdl_TARGET} ..."
         COMMAND ${_python_command}
             "${_codegen_dir}/Tensile/bin/TensileLogic"
-            "${_cdl_LOGIC_PATH}"
-            --architecture
-            "${_arches_semi}"
-            --use-bundled-known-bugs
-            --check-all
+            ${_tensile_logic_args}
         COMMAND ${CMAKE_COMMAND} -E touch "${_logic_stamp}"
         DEPENDS ${HIPBLASLT_PYTHON_DEPS} "${_known_bugs_resource}"
         VERBATIM
